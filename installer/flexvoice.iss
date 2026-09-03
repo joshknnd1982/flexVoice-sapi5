@@ -4,7 +4,7 @@
 ; enumerator from there and nowhere else), so this needs administrator rights.
 
 #define MyAppName "FlexVoice SAPI5"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "Josh Kennedy"
 #define MyAppURL "https://github.com/joshknnd1982/flexVoice-sapi5"
 

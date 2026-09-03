@@ -205,6 +205,28 @@ int cmd_frags(int voiceIndex, int count)
     return (ok && bytes) ? 0 : 1;
 }
 
+// Send text as a spell-out segment, which is what SAPI does for <spell> and
+// what NVDA uses for its spell-word command.
+int cmd_spell(int voiceIndex, const char* outPath, const char* text)
+{
+    SpeakParams p = params_for(voiceIndex);
+    std::vector<SpeakSegment> segs(1);
+    segs[0].kind = FV_SEG_SPELL;
+    segs[0].text = text ? text : "NVDA";
+
+    std::vector<unsigned char> pcm;
+    SpeakSink sink;
+    sink.audio = [&](const unsigned char* d, uint32_t n) {
+        pcm.insert(pcm.end(), d, d + n); return true; };
+    std::string error;
+    const bool ok = sharedClient().speak(p, segs, sink, error);
+    printf("spell \"%s\": %s, %u bytes (%.2f s)%s%s\n", segs[0].text.c_str(),
+           ok ? "ok" : "FAILED", static_cast<unsigned>(pcm.size()),
+           pcm.size() / 32000.0, error.empty() ? "" : " - ", error.c_str());
+    if (outPath && !pcm.empty()) write_wav(outPath, pcm, static_cast<int>(p.sampleRate));
+    return pcm.empty() ? 1 : 0;
+}
+
 int cmd_cancel(int voiceIndex)
 {
     SpeakParams p = params_for(voiceIndex);
@@ -326,6 +348,11 @@ int main(int argc, char** argv)
     }
     if (cmd == "cancel") return cmd_cancel(argc > 2 ? atoi(argv[2]) : 0);
     if (cmd == "arrow") return cmd_arrow(argc > 2 ? atoi(argv[2]) : 0);
+    if (cmd == "spell") {
+        return cmd_spell(argc > 2 ? atoi(argv[2]) : 0,
+                         argc > 3 ? argv[3] : nullptr,
+                         argc > 4 ? argv[4] : nullptr);
+    }
     if (cmd == "frags") {
         return cmd_frags(argc > 2 ? atoi(argv[2]) : 0, argc > 3 ? atoi(argv[3]) : 4);
     }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(FlexVoiceSAPI VERSION 1.0.1 LANGUAGES C CXX)
+project(FlexVoiceSAPI VERSION 1.0.2 LANGUAGES C CXX)
 
 # The single source of truth for the version is src/version.h; keep the
 # project() line, the installer's MyAppVersion and that header in step.

@@ -9,6 +9,7 @@ gets. Output:
       02-parameters/   each of the 14 speech parameters at 0, 25, 50, 75, 100 %
       03-sapi/         SAPI rate, pitch and volume through the real SAPI stack
       04-text/         inputs that crash or wedge the bare engine, spoken safely
+      05-characters/   single characters and spell-out, both silent before 1.0.2
       README.txt       what each file is
 """
 
@@ -58,6 +59,15 @@ PARAMS = [
     ("frication",   "Frication",    "strength of s, f, sh sounds"),
     ("plosive",     "Plosives",     "strength of p, t, k bursts"),
 ]
+
+# One character at a time, which is what arrowing through a document sends,
+# and the spell-word command. Both were silent before 1.0.2.
+CHAR_CASES = [
+    ("letters", ["a", "b", "z", "Q"]),
+    ("digits", ["0", "3", "7"]),
+    ("punctuation", [",", ".", "-", "(", "?", "%", "/", "@"]),
+]
+SPELL_CASES = ["cat", "hello", "NVDA", "flexvoice"]
 
 TEXT_CASES = [
     ("numbers", "Chapter 3 has 1999 items, 12 of them at 12:34 PM."),
@@ -175,6 +185,31 @@ def main():
         if not ok:
             failures.append(name)
         notes.append("    %s.wav -- %s" % (name, text))
+
+    # ---- 5. character navigation and spelling -----------------------------
+    d = os.path.join(OUT, "05-characters")
+    os.makedirs(d, exist_ok=True)
+    notes.append("")
+    notes.append("05-characters/ -- one character at a time (what arrowing sends)")
+    notes.append("    and the spell-word command; both were silent before 1.0.2")
+    for group, chars in CHAR_CASES:
+        for ch in chars:
+            safe = "".join(c if c.isalnum() else "x%02x" % ord(c) for c in ch)
+            fn = os.path.join(d, "char-%s-%s.wav" % (group, safe))
+            ok, _ = speak(1, fn, ch)
+            if not ok:
+                failures.append("char %r" % ch)
+        print("  characters: %-12s %d file(s)" % (group, len(chars)), flush=True)
+        notes.append("    char-%s-*.wav -- %s" % (group, " ".join(chars)))
+    for w in SPELL_CASES:
+        fn = os.path.join(d, "spell-%s.wav" % w)
+        p = subprocess.run([CLIENT, "spell", "1", fn, w],
+                           capture_output=True, text=True, timeout=120)
+        ok = os.path.exists(fn) and os.path.getsize(fn) > 1000
+        print("  spell %-12s %s" % (w, "ok" if ok else "FAILED"), flush=True)
+        if not ok:
+            failures.append("spell %s" % w)
+        notes.append("    spell-%s.wav -- the word %s spelled out" % (w, w))
 
     with open(os.path.join(OUT, "README.txt"), "w") as fh:
         fh.write("FlexVoice SAPI5 -- sample renders\n")

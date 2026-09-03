@@ -272,11 +272,13 @@ STDMETHODIMP ISpTTSEngineImpl::Speak(DWORD, REFGUID, const WAVEFORMATEX*,
         // rewritten text. The normalizer hands back a per-byte map into the
         // fragment, and this turns that into a map into the caller's string.
         auto push_text = [&](const wchar_t* wide, uint32_t wideLen,
-                             uint32_t srcOffset, FlexVoiceSegmentKind kind) {
-            const text::Normalized n = text::normalize(wide, wideLen, codepage);
+                             uint32_t srcOffset, text::Mode mode) {
+            const text::Normalized n = text::normalize(wide, wideLen, codepage, mode);
             if (n.text.empty()) return;
             SpeakSegment seg;
-            seg.kind = kind;
+            // Always FV_SEG_TEXT: spelling has already happened here, where the
+            // offset map that word events depend on can be built alongside it.
+            seg.kind = FV_SEG_TEXT;
             seg.text = n.text;
             segments.push_back(seg);
             for (size_t i = 0; i < n.srcMap.size(); ++i) {
@@ -356,8 +358,10 @@ STDMETHODIMP ISpTTSEngineImpl::Speak(DWORD, REFGUID, const WAVEFORMATEX*,
                 push_param(FV_SEG_VOLUME, clampi(static_cast<int>(curVolume), 0, 100));
             }
 
+            // SPVA_SpellOut is what SAPI produces for the <spell> tag, which is
+            // how NVDA's spell-word command reaches an engine.
             push_text(frag->pTextStart, frag->ulTextLen, frag->ulTextSrcOffset,
-                      frag->State.eAction == SPVA_SpellOut ? FV_SEG_SPELL : FV_SEG_TEXT);
+                      frag->State.eAction == SPVA_SpellOut ? text::Spell : text::Prose);
         }
 
         if (u.aborted || segments.empty()) return S_OK;

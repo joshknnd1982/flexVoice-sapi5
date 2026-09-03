@@ -260,6 +260,21 @@ The rules, all of them applied in `src/text_normalize.cpp`:
 * runs of whitespace collapsed — the engine turns a hard line break into a long
   pause, which makes say-all lurch
 
+Two rules exist because of how a screen reader is actually used:
+
+* **A lone character gets named.** Arrowing through a document one character at
+  a time sends a one-character utterance, and the prose rules quite correctly
+  reduce a bare `,` or `(` to a word boundary — which is silence. So when an
+  utterance would say nothing at all, the characters are named instead
+  ("comma", "left paren", "dash"). Prose is untouched: it always contains a
+  letter, so the fallback never fires and `Hello, world.` is not read as
+  "Hello comma world period".
+* **Spelling is done here, not by the engine.** `\spell\ … \endspell\` is in
+  the engine's keyword table and does not work: measured, every input produces
+  the same 0.66 s of near-silence regardless of the word. So `<spell>` — which
+  is how NVDA's spell-word command reaches an engine — is expanded by the
+  wrapper into letter names, digit words and symbol names.
+
 `probe/wrapscan.py` runs every one of those hostile inputs through the finished
 wrapper and checks it speaks.
 
@@ -267,8 +282,9 @@ wrapper and checks it speaks.
 
 `SPEI_WORD_BOUNDARY` and `SPEI_SENTENCE_BOUNDARY` (from the engine's own
 bookmarks, so they are sample-accurate rather than estimated),
-`SPEI_TTS_BOOKMARK`, `<silence>`, `<spell>`, and per-fragment `<rate>`,
-`<pitch>` and `<volume>`.
+`SPEI_TTS_BOOKMARK`, `<silence>`, `<spell>` (expanded by the wrapper, since the
+engine's own spell-out does nothing), and per-fragment `<rate>`, `<pitch>` and
+`<volume>`.
 
 ---
 
@@ -350,6 +366,7 @@ so the 2003 import library still resolves. RTTI is mandatory: `Engine.h` has an
 | `probe/wrapscan.py` | prove the wrapper survives all of it |
 | `probe/calibrate.py` | measure the per-voice level trims |
 | `probe/make_samples.py` | regenerate `samples/` |
+| `probe/charscan.py` | every printable character speaks, and spell-out really spells |
 | `test/sapi_probe.exe` | drive the real SAPI stack, registering under HKCU so it needs no elevation |
 
 `sapi_probe` is worth explaining: `DllRegisterServer` writes to HKLM, so

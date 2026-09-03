@@ -570,10 +570,16 @@ bool Engine::speak(const std::vector<Segment>& segments, bool wantWords,
                 break;
             }
             case FV_SEG_SPELL: {
-                // \spell\ ... \endspell\ is the engine's own spell-out block.
-                const std::string t = "\\spell\\" + sanitize(s.text) + "\\endspell\\";
-                e->addFragment(t.c_str());
-                anyText = true;
+                // Spelled out here rather than with the engine's own \spell\
+                // block, because that block does not work: measured, every
+                // input produces the same 21210 bytes of near-silence
+                // regardless of the word, so \spell\text\endspell\ swallows
+                // the text and emits a trailing pause.
+                const std::string t = text::normalize_bytes(s.text, text::Spell);
+                if (!t.empty()) {
+                    e->addFragment(t.c_str());
+                    anyText = true;
+                }
                 break;
             }
             case FV_SEG_SILENCE: {

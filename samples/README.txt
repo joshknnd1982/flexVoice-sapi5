@@ -46,3 +46,13 @@ bare engine.
     code.wav -- int x = 0; if (a == b) return; SELECT * FROM t WHERE id=5
     contractions.wav -- It's fine, you can't tell, we'll see, I'd rather not.
     accents.wav -- The eleve was naive at the cafe in Zurich.
+
+05-characters/ -- one character at a time (what arrowing sends)
+    and the spell-word command; both were silent before 1.0.2
+    char-letters-*.wav -- a b z Q
+    char-digits-*.wav -- 0 3 7
+    char-punctuation-*.wav -- , . - ( ? % / @
+    spell-cat.wav -- the word cat spelled out
+    spell-hello.wav -- the word hello spelled out
+    spell-NVDA.wav -- the word NVDA spelled out
+    spell-flexvoice.wav -- the word flexvoice spelled out

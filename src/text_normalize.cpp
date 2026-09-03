@@ -91,6 +91,30 @@ private:
     std::vector<uint32_t>* map_;
 };
 
+// Naming every character is the whole job for spell-out, and it is also the
+// fallback when an utterance would otherwise be silent -- which is what
+// arrowing character by character produces, one punctuation mark at a time.
+void spell_one(Writer& w, char c, uint32_t src)
+{
+    if (is_digit(c)) {
+        w.put(kOnes[c - '0'], src);
+        w.space(src);
+        return;
+    }
+    if (is_alpha(c)) {
+        const int idx = std::tolower(static_cast<unsigned char>(c)) - 'a';
+        if (idx >= 0 && idx <= 25) {
+            w.put(kLetterName[idx], src);
+            w.space(src);
+        }
+        return;
+    }
+    if (const char* name = symbol_name(c)) {
+        w.put(name, src);
+        w.space(src);
+    }
+}
+
 void spell_letters(Writer& w, const std::string& token, uint32_t src)
 {
     for (size_t i = 0; i < token.size(); ++i) {
@@ -153,6 +177,18 @@ std::vector<Byte> to_bytes(const wchar_t* src, size_t len, unsigned codepage)
         }
     }
     return out;
+}
+
+void spell_all(const std::vector<Byte>& in, std::string& out, std::vector<uint32_t>* map)
+{
+    Writer w(out, map);
+    for (size_t i = 0; i < in.size(); ++i) {
+        spell_one(w, in[i].c, in[i].src);
+    }
+    while (!out.empty() && out.back() == ' ') {
+        out.erase(out.size() - 1);
+        if (map) map->pop_back();
+    }
 }
 
 const char* three_letter_fix(const std::string& tok)
@@ -370,6 +406,51 @@ void run(const std::vector<Byte>& in, std::string& out, std::vector<uint32_t>* m
 
 }  // namespace
 
+const char* symbol_name(char c)
+{
+    // Plain, unambiguous names. A screen reader normally substitutes its own
+    // before the text ever reaches a synthesiser, so these are the fallback for
+    // when a raw character arrives -- which is exactly what happens when the
+    // user arrows onto one.
+    switch (c) {
+    case ' ':  return "space";
+    case '\t': return "tab";
+    case '!':  return "exclamation";
+    case '"':  return "quote";
+    case '#':  return "number sign";
+    case '$':  return "dollar";
+    case '%':  return "percent";
+    case '&':  return "ampersand";
+    case '\'': return "apostrophe";
+    case '(':  return "left paren";
+    case ')':  return "right paren";
+    case '*':  return "asterisk";
+    case '+':  return "plus";
+    case ',':  return "comma";
+    case '-':  return "dash";
+    case '.':  return "period";
+    case '/':  return "slash";
+    case ':':  return "colon";
+    case ';':  return "semicolon";
+    case '<':  return "less than";
+    case '=':  return "equals";
+    case '>':  return "greater than";
+    case '?':  return "question mark";
+    case '@':  return "at";
+    case '[':  return "left bracket";
+    case '\\': return "backslash";
+    case ']':  return "right bracket";
+    case '^':  return "caret";
+    case '_':  return "underscore";
+    case '`':  return "back tick";
+    case '{':  return "left brace";
+    case '|':  return "vertical bar";
+    case '}':  return "right brace";
+    case '~':  return "tilde";
+    default:   return nullptr;
+    }
+}
+
 std::string number_to_words(const std::string& digits)
 {
     if (digits.empty()) return std::string();
@@ -415,17 +496,48 @@ std::string number_to_words(const std::string& digits)
     return out;
 }
 
-Normalized normalize(const wchar_t* src, size_t len, unsigned codepage)
+namespace {
+
+bool has_speakable(const std::string& s)
+{
+    for (char c : s) {
+        if (is_alnum(c)) return true;
+    }
+    return false;
+}
+
+// Prose rules first; if they leave nothing a voice could say, name the
+// characters instead. Arrowing through a document one character at a time
+// sends exactly that -- a lone "," or "(" -- and the prose rules quite
+// correctly reduce those to a word boundary, which is silence.
+void run_with_fallback(const std::vector<Byte>& bytes, Mode mode,
+                       std::string& text, std::vector<uint32_t>* map)
+{
+    if (mode == Spell) {
+        spell_all(bytes, text, map);
+        return;
+    }
+    run(bytes, text, map);
+    if (!has_speakable(text)) {
+        text.clear();
+        if (map) map->clear();
+        spell_all(bytes, text, map);
+    }
+}
+
+}  // namespace
+
+Normalized normalize(const wchar_t* src, size_t len, unsigned codepage, Mode mode)
 {
     Normalized out;
     if (!src || !len) return out;
     const std::vector<Byte> bytes = to_bytes(src, len, codepage);
     out.srcMap.reserve(bytes.size());
-    run(bytes, out.text, &out.srcMap);
+    run_with_fallback(bytes, mode, out.text, &out.srcMap);
     return out;
 }
 
-std::string normalize_bytes(const std::string& in)
+std::string normalize_bytes(const std::string& in, Mode mode)
 {
     std::vector<Byte> bytes;
     bytes.reserve(in.size());
@@ -434,7 +546,7 @@ std::string normalize_bytes(const std::string& in)
                          static_cast<uint32_t>(i)});
     }
     std::string out;
-    run(bytes, out, nullptr);
+    run_with_fallback(bytes, mode, out, nullptr);
     return out;
 }
 

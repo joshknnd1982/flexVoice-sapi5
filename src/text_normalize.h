@@ -39,17 +39,34 @@ struct Normalized {
     std::vector<uint32_t> srcMap;  // srcMap[i] is the source index of text[i]
 };
 
+enum Mode {
+    // Ordinary prose. Punctuation is left as punctuation so the engine can use
+    // it for phrasing, and only tokens the engine mishandles are rewritten.
+    Prose,
+    // Every character named out loud: "cat" becomes "see ay tee", "3" becomes
+    // "three", "," becomes "comma". This is what SAPI's <spell> asks for and
+    // what NVDA's spell-word command sends. The engine's own \spell\ block does
+    // not work -- it renders 0.66 s of nothing for any input -- so the wrapper
+    // has to do the spelling itself.
+    Spell,
+};
+
 // `src` is UTF-16; `codepage` is the engine's single-byte codepage for the
 // language in use. Offsets in srcMap are indices into `src`.
-Normalized normalize(const wchar_t* src, size_t len, unsigned codepage);
+Normalized normalize(const wchar_t* src, size_t len, unsigned codepage,
+                     Mode mode = Prose);
 
 // Same rules over bytes already in the engine's codepage, for callers that do
 // not need an offset map (the host's safety net, the preview box).
-std::string normalize_bytes(const std::string& in);
+std::string normalize_bytes(const std::string& in, Mode mode = Prose);
 
 // Digit run -> English words. Exposed because it is the load-bearing rule and
 // deserves its own tests.
 std::string number_to_words(const std::string& digits);
+
+// The spoken name of a character that has none of its own -- "comma", "dash",
+// "left paren". Returns nullptr for letters and digits, which speak already.
+const char* symbol_name(char c);
 
 }  // namespace text
 }  // namespace FlexVoice
