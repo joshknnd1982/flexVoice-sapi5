@@ -28,6 +28,19 @@ using namespace FlexVoice;
 
 namespace {
 
+// GetTickCount has a 15.6 ms granularity, which is the same order as the
+// numbers being measured here -- it reported a flat "15 ms" for a latency that
+// is actually a couple of milliseconds. Everything timed in this file uses the
+// performance counter instead.
+double now_ms()
+{
+    static LARGE_INTEGER freq = {};
+    if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+    LARGE_INTEGER t;
+    QueryPerformanceCounter(&t);
+    return (1000.0 * t.QuadPart) / freq.QuadPart;
+}
+
 const char* kText =
     "The quick brown fox jumps over the lazy dog. "
     "FlexVoice, speaking through the pipe from a "
@@ -227,6 +240,40 @@ int cmd_cancel(int voiceIndex)
     return 0;
 }
 
+// What arrowing through a document actually looks like: speak, cancel almost
+// immediately, speak again. The cancel drops the pipe, so this measures the
+// reconnect as well as the render -- which cmd_bench, speaking one utterance
+// after another to completion, never touches.
+int cmd_arrow(int voiceIndex)
+{
+    SpeakParams p = params_for(voiceIndex);
+    std::vector<SpeakSegment> segs(1);
+    segs[0].kind = FV_SEG_TEXT;
+    segs[0].text = "This is a line of text in a document that gets interrupted.";
+
+    double worst = 0, total = 0;
+    const int kRounds = 20;
+    for (int i = 0; i < kRounds; ++i) {
+        double firstAudio = 0;
+        size_t got = 0;
+        const double t0 = now_ms();
+        SpeakSink sink;
+        sink.audio = [&](const unsigned char*, uint32_t n) -> bool {
+            if (firstAudio == 0) firstAudio = now_ms() - t0;
+            got += n;
+            return got < 6000;          // about 190 ms of audio, then arrow away
+        };
+        std::string error;
+        sharedClient().speak(p, segs, sink, error);
+        total += firstAudio;
+        if (firstAudio > worst) worst = firstAudio;
+        printf("  press %2d: first audio %6.2f ms\n", i, firstAudio);
+    }
+    printf("arrow-key latency over %d presses: mean %.2f ms, worst %.2f ms\n",
+           kRounds, total / kRounds, worst);
+    return 0;
+}
+
 int cmd_bench(int voiceIndex)
 {
     SpeakParams p = params_for(voiceIndex);
@@ -251,9 +298,8 @@ int cmd_bench(int voiceIndex)
         totalFirst += firstAudio;
         if (firstAudio > worstFirst) worstFirst = firstAudio;
     }
-    printf("first-audio latency over 20 utterances: mean %lu ms, worst %lu ms\n",
-           static_cast<unsigned long>(totalFirst / 20),
-           static_cast<unsigned long>(worstFirst));
+    printf("first-audio latency over 20 utterances: mean %.2f ms, worst %.2f ms\n",
+           totalFirst / 20, worstFirst);
     return 0;
 }
 
@@ -279,6 +325,7 @@ int main(int argc, char** argv)
                          argc > 5 ? atof(argv[5]) : 0.0);
     }
     if (cmd == "cancel") return cmd_cancel(argc > 2 ? atoi(argv[2]) : 0);
+    if (cmd == "arrow") return cmd_arrow(argc > 2 ? atoi(argv[2]) : 0);
     if (cmd == "frags") {
         return cmd_frags(argc > 2 ? atoi(argv[2]) : 0, argc > 3 ? atoi(argv[3]) : 4);
     }

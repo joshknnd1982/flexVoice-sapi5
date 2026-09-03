@@ -87,6 +87,13 @@ if(NOT BUILD_X64)
     # The SDK requires RTTI (Engine.h #errors without _CPPRTTI) and throws.
     target_compile_options(flexvoice_host PRIVATE /EHsc /GR)
 
+    # Reads the configuration utility the way a screen reader does: MSAA names,
+    # roles, tab order and access keys, against the live window.
+    add_executable(a11y_probe test/a11y_probe.cpp)
+    target_link_libraries(a11y_probe PRIVATE oleacc ole32 oleaut32 user32)
+    target_compile_definitions(a11y_probe PRIVATE ${COMMON_DEFS})
+    set_property(TARGET a11y_probe PROPERTY CXX_STANDARD 17)
+
     # -----------------------------------------------------------------------
     # Configuration utility
     # -----------------------------------------------------------------------
@@ -108,7 +115,7 @@ if(NOT BUILD_X64)
 endif()
 
 if(MSVC)
-    foreach(tgt FlexVoiceSAPI client_test sapi_probe flexvoice_host FlexVoiceConfig)
+    foreach(tgt FlexVoiceSAPI client_test sapi_probe a11y_probe flexvoice_host FlexVoiceConfig)
         if(TARGET ${tgt})
             target_compile_options(${tgt} PRIVATE /W3 /MP /utf-8)
             set_property(TARGET ${tgt} PROPERTY

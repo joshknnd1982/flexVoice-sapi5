@@ -58,6 +58,31 @@ uint32_t map_offset(const Utterance& u, uint32_t engineOffset)
     return u.offsetMap.back().second;
 }
 
+// Start the engine host, once per process, off the calling thread. The first
+// utterance would otherwise pay ~190 ms for launching it and loading the
+// language -- and the first utterance is usually the one the user is waiting
+// on. Everything after that reuses the running host and costs ~6 ms.
+DWORD WINAPI warm_up_thread(LPVOID)
+{
+    FlexVoicePong pong = {};
+    std::string error;
+    if (!sharedClient().ping(pong, error)) {
+        FV_LOG("sapi: warm-up ping failed: %s", error.c_str());
+    }
+    return 0;
+}
+
+void warm_up_host()
+{
+    static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
+    InitOnceExecuteOnce(&once, [](PINIT_ONCE, PVOID, PVOID*) -> BOOL {
+        if (HANDLE h = CreateThread(nullptr, 0, warm_up_thread, nullptr, 0, nullptr)) {
+            CloseHandle(h);
+        }
+        return TRUE;
+    }, nullptr, nullptr);
+}
+
 bool emit_event(Utterance& u, SPEVENTENUM id, ULONG stream, WPARAM wp, LPARAM lp,
                 SPEVENTLPARAMTYPE lpType)
 {
@@ -128,8 +153,13 @@ STDMETHODIMP ISpTTSEngineImpl::GetOutputFormat(const GUID*, const WAVEFORMATEX*,
     if (!pOutputFormatId || !ppCoMemOutputWaveFormatEx) return E_POINTER;
     *ppCoMemOutputWaveFormatEx = nullptr;
 
-    // Deliberately no engine work here: SAPI does not promise that
-    // GetOutputFormat and Speak run on the same thread.
+    // No engine work here: SAPI does not promise that GetOutputFormat and
+    // Speak run on the same thread. But this is the first call SAPI makes
+    // after a voice is selected, and starting the host costs about 190 ms, so
+    // do that now on a background thread rather than making the user's first
+    // keystroke pay for it.
+    warm_up_host();
+
     const int hz = SettingsStore::current().sampleRate;
 
     auto* wfx = static_cast<WAVEFORMATEX*>(CoTaskMemAlloc(sizeof(WAVEFORMATEX)));

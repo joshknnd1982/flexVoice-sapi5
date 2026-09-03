@@ -75,6 +75,12 @@ public:
 
     // Pop the next stream item, or return false if none is ready yet.
     bool poll(StreamItem& out);
+
+    // Block until poll() would return something, or until the utterance ends.
+    // Polling with Sleep(1) instead costs a full 15.6 ms timer tick per
+    // utterance -- which was most of the remaining keystroke latency once the
+    // pipe reconnect was fixed.
+    void waitForItem(uint32_t timeoutMs);
     // True once DONE or FAILED has been produced for the current utterance.
     bool finished() const;
 
@@ -93,6 +99,11 @@ private:
     std::string currentTav_;
     uint32_t    language_ = 0;
     int         sampleRate_ = 16000;
+
+    // What the current Speaker was built from, so an utterance that changes
+    // nothing but rate or volume skips reloading the .tav entirely.
+    uint32_t    lastMask_ = 0;
+    double      lastParams_[FVP_COUNT] = {};
 
     void destroyEngine();
 };

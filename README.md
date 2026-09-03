@@ -182,16 +182,44 @@ the error and terminates itself; the next request gets a clean one.
 
 ### Responsiveness
 
-Measured on this machine, through the whole stack including the pipe:
+Measured on this machine with `QueryPerformanceCounter`, through the whole
+stack including the pipe. The pattern that matters is *arrowing* — speak,
+cancel almost immediately, speak again — not one utterance after another to
+completion, because a screen reader user interrupts constantly:
 
 | | 32-bit client | 64-bit client |
 |---|---|---|
-| First audio after `Speak` | 15 ms mean, 16 ms worst | 18 ms mean, 32 ms worst |
+| First audio per keystroke, warm | 6.1 ms mean, 7.3 ms worst | 7.0 ms mean |
 | Cancel to silence | 0 ms | 0 ms |
 | Render speed | ~70× real time | ~70× real time |
 
 Cancel is genuinely instantaneous: `Engine::stop()` returns in 0 ms and not one
 further audio buffer arrives afterwards, measured across repeated trials.
+
+Getting there took three fixes, and the interesting part is that none of them
+was the synthesiser:
+
+* **The pipe instance was destroyed and recreated per client.** Since
+  cancelling drops the connection, that happened on every keystroke, and it
+  left a window in which the pipe name did not exist at all — so the client got
+  `ERROR_FILE_NOT_FOUND` and backed off 100 ms. One instance, connected and
+  disconnected in a loop, removes it entirely. This was the bulk of a
+  user-visible ~250 ms lag while arrowing.
+* **The `.tav` was reloaded and the speaker re-registered every utterance,**
+  even when nothing but the rate had changed. Now the speaker is rebuilt only
+  when something it actually depends on moves.
+* **The host polled for engine output with `Sleep(1)`,** which on Windows'
+  15.6 ms timer costs a full tick. The output site signals an event instead.
+
+A fourth thing that looked obvious and was not: raising the system timer
+resolution with `timeBeginPeriod(1)`. Measured, it changes nothing — 6.1 ms
+either way — because nothing on this path sleeps any more. It is deliberately
+not in the code.
+
+One measurement warning: `GetTickCount` has a 15.6 ms granularity, the same
+order as these numbers. It reported a flat "15 ms" for what is really 6 ms,
+which is enough to send you hunting a delay that is not there. Use
+`QueryPerformanceCounter`.
 
 ---
 

@@ -353,7 +353,7 @@ void build_controls()
 
     make(L"BUTTON", L"Spea&k it", BS_PUSHBUTTON | WS_TABSTOP, 0,
          kCol1, yBottom + 20, 60, 14, IDC_PREVIEW);
-    make(L"BUTTON", L"&Stop", BS_PUSHBUTTON | WS_TABSTOP, 0,
+    make(L"BUTTON", L"Stop pla&ying", BS_PUSHBUTTON | WS_TABSTOP, 0,
          kCol1 + 66, yBottom + 20, 50, 14, IDC_STOP);
     make(L"BUTTON", L"Reset to defa&ults", BS_PUSHBUTTON | WS_TABSTOP, 0,
          kCol1 + 122, yBottom + 20, 80, 14, IDC_DEFAULTS);
@@ -362,7 +362,7 @@ void build_controls()
                       kCol1 + 208, yBottom + 21, 100, 12, IDC_DEBUGLOG);
     set_acc_name(g_debugLog, L"Write a diagnostic log file");
 
-    make(L"BUTTON", L"&Close", BS_DEFPUSHBUTTON | WS_TABSTOP, 0,
+    make(L"BUTTON", L"Clos&e", BS_DEFPUSHBUTTON | WS_TABSTOP, 0,
          kCol1 + 314, yBottom + 20, 50, 14, IDOK);
 
     g_status = make(L"STATIC", L"Ready.", SS_LEFT | SS_ENDELLIPSIS, 0,

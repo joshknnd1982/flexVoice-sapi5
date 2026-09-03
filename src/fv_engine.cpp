@@ -121,8 +121,17 @@ public:
         : fmt_(sampleRate, bits, WaveOutputFormat::WC_PCM_SIGNED)
     {
         InitializeCriticalSection(&cs_);
+        // Auto-reset: one wake per item is exactly what the reader wants.
+        ready_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     }
-    ~Site() { DeleteCriticalSection(&cs_); }
+    ~Site()
+    {
+        if (ready_) CloseHandle(ready_);
+        DeleteCriticalSection(&cs_);
+    }
+
+    HANDLE readyEvent() const { return ready_; }
+    void signal() { if (ready_) SetEvent(ready_); }
 
     void beginUtterance(uint32_t gen, bool words, bool sentences,
                         const std::vector<uint32_t>& expectedBookmarks)
@@ -147,6 +156,7 @@ public:
         pending_.clear();
         done_ = true;
         LeaveCriticalSection(&cs_);
+        signal();
     }
 
     bool pop(StreamItem& out)
@@ -175,6 +185,7 @@ public:
         queue_.push_back(it);
         done_ = true;
         LeaveCriticalSection(&cs_);
+        signal();
     }
 
     // Flush the queued bookmarks and end the utterance without asking the
@@ -194,6 +205,7 @@ public:
         queue_.push_back(end);
         done_ = true;
         LeaveCriticalSection(&cs_);
+        signal();
     }
 
     // --- IWaveOutputSite ---------------------------------------------------
@@ -213,6 +225,7 @@ public:
             queue_.push_back(it);
         }
         LeaveCriticalSection(&cs_);
+        signal();
     }
 
     virtual void setBookmark(Bookmark* bm)
@@ -312,10 +325,12 @@ private:
             break;
         }
         LeaveCriticalSection(&cs_);
+        signal();
     }
 
     WaveOutputFormat        fmt_;
     CRITICAL_SECTION        cs_;
+    HANDLE                  ready_ = nullptr;
     std::deque<StreamItem>  queue_;
     std::vector<uint32_t>   pending_;
     uint32_t                generation_ = 0;
@@ -417,6 +432,38 @@ bool Engine::selectVoice(const std::string& tavPath, const double* params,
     const bool sameTav = (tavPath == currentTav_);
     const bool sameRate = (sampleRate == sampleRate_);
 
+    // The speaker-level parameters decide the voice's identity and hardly ever
+    // change; the engine-level three change on every utterance a screen reader
+    // sends. Reloading the .tav from disk, re-applying the parameters and
+    // calling addSpeaker/setSpeaker each time is pure cost on the path that
+    // matters most -- every keystroke while arrowing. Do it only when something
+    // it depends on actually moved.
+    bool speakerUnchanged = engine_ && site_ && sameTav && sameRate &&
+                            speaker_ && paramMask == lastMask_;
+    if (speakerUnchanged) {
+        for (int i = 0; i < FVP_COUNT; ++i) {
+            if (kEngineLevel[i] || !(paramMask & (1u << i))) continue;
+            if (params[i] != lastParams_[i]) { speakerUnchanged = false; break; }
+        }
+    }
+
+    if (speakerUnchanged) {
+        try {
+            MM_TTSAPI::Engine* e = static_cast<MM_TTSAPI::Engine*>(engine_);
+            for (int i = 0; i < FVP_COUNT; ++i) {
+                if (!kEngineLevel[i]) continue;
+                const double v = (paramMask & (1u << i))
+                    ? clampParam(static_cast<FlexVoiceParam>(i), params[i])
+                    : 1.0;
+                e->attribute().set(kAttrName[i], v);
+                lastParams_[i] = params[i];
+            }
+            return true;
+        } catch (...) {
+            // Fall through and rebuild properly.
+        }
+    }
+
     try {
         std::auto_ptr<Speaker> sp(new Speaker());
         sp->load(tavPath.c_str());
@@ -473,6 +520,8 @@ bool Engine::selectVoice(const std::string& tavPath, const double* params,
         delete static_cast<Speaker*>(speaker_);
         speaker_ = sp.release();
         currentTav_ = tavPath;
+        lastMask_ = paramMask;
+        for (int i = 0; i < FVP_COUNT; ++i) lastParams_[i] = params[i];
         return true;
     } catch (GenericException& e) {
         error = std::string(e.what()) + ": " + e.details();
@@ -588,6 +637,12 @@ bool Engine::speak(const std::vector<Segment>& segments, bool wantWords,
 }
 
 bool Engine::poll(StreamItem& out) { return site_ && site_->pop(out); }
+
+void Engine::waitForItem(uint32_t timeoutMs)
+{
+    if (!site_ || !site_->readyEvent()) { Sleep(1); return; }
+    WaitForSingleObject(site_->readyEvent(), timeoutMs);
+}
 bool Engine::finished() const { return !site_ || site_->finished(); }
 
 void Engine::stop()

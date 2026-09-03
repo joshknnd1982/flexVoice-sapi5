@@ -130,14 +130,21 @@ bool EngineClient::ensureConnected(std::string& error)
 {
     if (pipe_ != INVALID_HANDLE_VALUE) return true;
 
+    // Reconnecting is on the critical path: cancelling an utterance drops the
+    // connection, so every keystroke while arrowing through a document comes
+    // back through here. Retry fast and only slow down once it is clear the
+    // host really is not there -- a flat 100 ms back-off used to put 100 ms on
+    // every single keypress.
     bool launched = false;
-    for (int attempt = 0; attempt < 12; ++attempt) {
+    for (int attempt = 0; attempt < 40; ++attempt) {
         pipe_ = CreateFileW(FLEXVOICE_PIPE_NAME, GENERIC_READ | GENERIC_WRITE,
                             0, nullptr, OPEN_EXISTING, 0, nullptr);
         if (pipe_ != INVALID_HANDLE_VALUE) break;
 
         const DWORD err = GetLastError();
         if (err == ERROR_PIPE_BUSY) {
+            // Another client is mid-utterance. Wait for an instance rather
+            // than spinning.
             WaitNamedPipeW(FLEXVOICE_PIPE_NAME, 2000);
             continue;
         }
@@ -149,7 +156,11 @@ bool EngineClient::ensureConnected(std::string& error)
             launched = true;
             if (!launchServer(error)) return false;
         }
-        Sleep(100);
+        // The host is between DisconnectNamedPipe and ConnectNamedPipe for
+        // microseconds at a time, so the first few retries should be immediate.
+        if (attempt < 20)      Sleep(0);
+        else if (attempt < 30) Sleep(2);
+        else                   Sleep(50);
     }
 
     if (pipe_ == INVALID_HANDLE_VALUE) {

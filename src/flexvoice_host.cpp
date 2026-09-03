@@ -263,6 +263,10 @@ bool handle_speak(HANDLE pipe, const std::vector<char>& payload)
         StreamItem item;
         if (!g_engine.poll(item)) {
             if (g_engine.finished()) break;
+            // Wait on the engine's own signal rather than polling. A Sleep(1)
+            // here costs a full 15.6 ms timer tick, which was most of the
+            // per-keystroke latency once the pipe reconnect was fixed.
+            g_engine.waitForItem(5);
             if (GetTickCount() > deadline) {
                 FV_LOG("host: engine wedged on this utterance; exiting so the next "
                        "request gets a clean one");
@@ -273,7 +277,6 @@ bool handle_speak(HANDLE pipe, const std::vector<char>& payload)
                 // The client relaunches us; startup is about 30 ms.
                 TerminateProcess(GetCurrentProcess(), 2);
             }
-            Sleep(1);
             continue;
         }
 
@@ -373,6 +376,13 @@ void handle_client(HANDLE pipe)
 
 int run_server()
 {
+    // No timeBeginPeriod here on purpose. Raising the system timer resolution
+    // looked like an obvious win for latency and, measured, changes nothing:
+    // 6.1 ms per utterance with it, 6.1 ms without. The reason is that nothing
+    // on this path sleeps -- the reader waits on an event the output site
+    // signals. A system-wide timer change with no measurable benefit is not
+    // worth the power it costs.
+
     g_serverMutex = CreateMutexW(nullptr, TRUE, FLEXVOICE_SERVER_MUTEX);
     if (!g_serverMutex || GetLastError() == ERROR_ALREADY_EXISTS) {
         FV_LOG("host: another instance already holds the mutex, exiting");
@@ -398,29 +408,35 @@ int run_server()
         FV_LOG("host: no usable language data under \"%s\"", g_engineRoot.c_str());
     }
 
-    while (!g_shuttingDown) {
-        HANDLE pipe = CreateNamedPipeW(
-            FLEXVOICE_PIPE_NAME,
-            PIPE_ACCESS_DUPLEX,
-            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-            PIPE_UNLIMITED_INSTANCES,
-            64 * 1024, 64 * 1024, 0, nullptr);
-        if (pipe == INVALID_HANDLE_VALUE) {
-            FV_LOG("host: CreateNamedPipe failed, %lu", GetLastError());
-            Sleep(200);
-            continue;
-        }
+    // The pipe instance is created once and never destroyed. Recreating it per
+    // client leaves a window in which the pipe name does not exist at all, and
+    // a client that connects in that window gets ERROR_FILE_NOT_FOUND and backs
+    // off. That is not a rare race: cancelling drops the connection, so it
+    // happened on *every* keystroke while arrowing through a document, and cost
+    // about 100 ms each time. Connect, serve, disconnect, connect again.
+    HANDLE pipe = CreateNamedPipeW(
+        FLEXVOICE_PIPE_NAME,
+        PIPE_ACCESS_DUPLEX,
+        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        PIPE_UNLIMITED_INSTANCES,
+        64 * 1024, 64 * 1024, 0, nullptr);
+    if (pipe == INVALID_HANDLE_VALUE) {
+        FV_LOG("host: CreateNamedPipe failed, %lu", GetLastError());
+        if (g_serverMutex) { ReleaseMutex(g_serverMutex); CloseHandle(g_serverMutex); }
+        return 1;
+    }
 
+    while (!g_shuttingDown) {
         const BOOL connected = ConnectNamedPipe(pipe, nullptr)
                                    ? TRUE
                                    : (GetLastError() == ERROR_PIPE_CONNECTED);
         if (connected) {
             handle_client(pipe);
             FlushFileBuffers(pipe);
-            DisconnectNamedPipe(pipe);
         }
-        CloseHandle(pipe);
+        DisconnectNamedPipe(pipe);
     }
+    CloseHandle(pipe);
 
     FV_LOG("host: exiting");
     if (g_serverMutex) { ReleaseMutex(g_serverMutex); CloseHandle(g_serverMutex); }
