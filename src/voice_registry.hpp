@@ -2,6 +2,8 @@
 
 #include <windows.h>
 #include <sapi.h>
+#include <string.h>
+
 #include <string>
 
 #include "registry.hpp"
@@ -49,23 +51,45 @@ inline void write_voice_tokens(HKEY root, const std::wstring& clsid_str)
     }
 }
 
-// Sweeps the full set regardless of what is currently registered, so a rename
-// or a removed voice cannot leave an orphaned token pointing at the engine.
-inline void remove_voice_tokens(HKEY root) noexcept
+// Every token id this build writes starts with this. It is also what makes an
+// orphan sweep safe: only keys under Speech\Voices\Tokens carrying this prefix
+// are ours, so nothing another vendor wrote can ever match.
+inline constexpr const wchar_t* token_prefix = L"FlexVoice_";
+
+// Removes every FlexVoice token, whether or not this build still knows its
+// name, and returns how many went. Two things matter here and neither did
+// before:
+//
+//   * the delete is recursive. A token has an Attributes subkey, and
+//     RegDeleteKeyW refuses to remove a key that has subkeys -- it returns
+//     ERROR_ACCESS_DENIED. Every removal silently failed, so uninstalling
+//     left nine tokens behind naming a CLSID whose DLL had just been deleted.
+//     A SAPI5 client then lists nine voices it cannot instantiate, and if one
+//     of them was the user's default voice, speech stops everywhere.
+//
+//   * the sweep is by prefix, not by the current voice table, so a voice
+//     renamed or dropped between releases still gets cleaned up.
+inline int remove_voice_tokens(HKEY root) noexcept
 {
     using namespace FlexVoice::registry;
+    int removed = 0;
     try {
-        key tokens(root, voices_path, KEY_ALL_ACCESS);
-        for (int i = 0; i < voices::kVoiceCount; ++i) {
-            try {
-                tokens.delete_subkey(voice_attributes(i).token_id());
+        key tokens(root, voices_path, delete_access);
+        const std::wstring prefix = token_prefix;
+
+        for (const std::wstring& name : tokens.subkey_names()) {
+            if (name.size() < prefix.size() ||
+                _wcsnicmp(name.c_str(), prefix.c_str(), prefix.size()) != 0) {
+                continue;
             }
-            catch (...) {
+            if (tokens.delete_subtree(name)) {
+                ++removed;
             }
         }
     }
     catch (...) {
     }
+    return removed;
 }
 
 }  // namespace sapi

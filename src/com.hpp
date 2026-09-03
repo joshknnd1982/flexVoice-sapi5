@@ -347,8 +347,11 @@ public:
     template<class T>
     void register_class();
 
+    // Static: unregistering needs the CLSID and nothing else, so an uninstall
+    // never has to construct a registrar -- and never fails because the
+    // module path could not be resolved.
     template<class T>
-    void unregister_class();
+    static bool unregister_class() noexcept;
 
 private:
     std::wstring dll_path_;
@@ -365,14 +368,24 @@ void class_registrar::register_class()
     server_subkey.set(L"ThreadingModel", L"Both");
 }
 
+// Never throws. Unregistration runs during an uninstall, where the caller has
+// several independent things to clean up and an exception part way through
+// would abandon the rest of them.
+//
+// The subtree goes in one call. The old two-step -- delete InProcServer32,
+// then delete the CLSID key -- relied on the CLSID key having exactly the one
+// subkey this code put there, and left the whole registration behind the
+// moment anything else added a second one.
 template<class T>
-void class_registrar::unregister_class()
+bool class_registrar::unregister_class() noexcept
 {
-    std::wstring str_clsid(clsid_as_string<T>());
-    registry::key clsid_key(HKEY_LOCAL_MACHINE, clsid_key_path);
-    registry::key clsid_subkey(clsid_key, str_clsid);
-    clsid_subkey.delete_subkey(L"InProcServer32");
-    clsid_key.delete_subkey(str_clsid);
+    try {
+        registry::key clsid_key(HKEY_LOCAL_MACHINE, clsid_key_path, registry::delete_access);
+        return clsid_key.delete_subtree(clsid_as_string<T>());
+    }
+    catch (...) {
+        return false;
+    }
 }
 }
 }

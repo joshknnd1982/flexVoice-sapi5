@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(FlexVoiceSAPI VERSION 1.0.2 LANGUAGES C CXX)
+project(FlexVoiceSAPI VERSION 1.0.3 LANGUAGES C CXX)
 
 # The single source of truth for the version is src/version.h; keep the
 # project() line, the installer's MyAppVersion and that header in step.
@@ -63,6 +63,17 @@ target_compile_definitions(client_test PRIVATE ${COMMON_DEFS}
     FV_FILE_DESCRIPTION="FlexVoice SAPI5 diagnostics"
     FV_INTERNAL_NAME="flexvoice_diag")
 set_property(TARGET client_test PROPERTY CXX_STANDARD 17)
+
+# Drives write_voice_tokens and remove_voice_tokens themselves, against a
+# sandbox key in HKCU. sapi_probe registers and unregisters with a helper of
+# its own, so the product's uninstall path had never been run by a test -- and
+# it did not work. Built for both architectures because that path deletes from
+# whichever registry view the caller happens to be in.
+add_executable(registry_test test/registry_test.cpp src/registry.cpp)
+target_include_directories(registry_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(registry_test PRIVATE advapi32)
+target_compile_definitions(registry_test PRIVATE ${COMMON_DEFS})
+set_property(TARGET registry_test PROPERTY CXX_STANDARD 17)
 
 # Exercises the real SAPI5 stack. Registers under HKCU so it can run without
 # elevation, which is the only way the registry path SAPI actually takes gets
@@ -134,7 +145,7 @@ if(NOT BUILD_X64)
 endif()
 
 if(MSVC)
-    foreach(tgt FlexVoiceSAPI client_test sapi_probe a11y_probe flexvoice_host FlexVoiceConfig)
+    foreach(tgt FlexVoiceSAPI client_test registry_test sapi_probe a11y_probe flexvoice_host FlexVoiceConfig)
         if(TARGET ${tgt})
             target_compile_options(${tgt} PRIVATE /W3 /MP /utf-8)
             set_property(TARGET ${tgt} PROPERTY

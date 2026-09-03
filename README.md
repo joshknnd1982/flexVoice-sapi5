@@ -316,6 +316,65 @@ next utterance without restarting the screen reader.
 
 ---
 
+## Registration, and getting back out again
+
+SAPI 5's voice list is one shared registry key. Every voice on the machine,
+from every vendor, is a subkey of
+`HKLM\SOFTWARE\Microsoft\Speech\Voices\Tokens` — twice over on 64-bit Windows,
+once in the native view for 64-bit clients and once under `WOW6432Node` for
+32-bit ones. So an installer that leaves a broken entry there is not leaving a
+mess of its own. It is handing every other speech engine on the machine a voice
+that cannot be created.
+
+**1.0.2 did exactly that**, and this is worth writing down because the mistake
+is easy to make and invisible until somebody uninstalls.
+
+`DllUnregisterServer` removed each voice token with `RegDeleteKeyW`. That
+function will not delete a key that has subkeys — it returns
+`ERROR_ACCESS_DENIED` — and every voice token has an `Attributes` subkey,
+because SAPI requires one. So **not one token was ever removed**, by any
+version, and the failure was swallowed by a `catch (...)`. Uninstalling
+FlexVoice deleted the DLL and left nine voices behind naming a CLSID that no
+longer resolved.
+
+What that does to a machine depends on the client. NVDA remembers its SAPI 5
+voice by token path; if the remembered voice is one of the nine, the token is
+still there to be found, creating it fails, and the SAPI 5 synthesiser will not
+start at all. From the user's chair the entire SAPI 5 stack is broken, and
+*reinstalling FlexVoice fixes it* — which is a confusing enough symptom that it
+is worth naming.
+
+The reason no test caught it: `sapi_probe` registers and unregisters with its
+own helper, which used `RegDeleteTreeW`. The test cleaned up correctly while
+the product did not. `test/registry_test.cpp` now drives
+`write_voice_tokens` and `remove_voice_tokens` themselves.
+
+Three things changed.
+
+* **Deleting a registry key here always means deleting the subtree.**
+  `registry::key::delete_subtree` refuses an empty name, because
+  `RegDeleteTreeW` with an empty subkey empties the key the handle names —
+  which for these callers is the machine's entire voice list.
+* **The uninstall no longer depends on `regsvr32` running.** The installer
+  carries `[Registry]` entries with `uninsdeletekey dontcreatekey`, which
+  create nothing but record the deletion in `unins000.dat`, and a
+  `CurUninstallStepChanged` sweep that matches tokens by their `FlexVoice_`
+  prefix in both registry views — so a voice renamed in some earlier release
+  is caught too. Three independent mechanisms, none of which can take the
+  others down with it. No parent key is ever touched.
+* **The dynamic token enumerator is gone.** Registering under
+  `Voices\TokenEnums` as well as writing static tokens made SAPI list every
+  FlexVoice voice *twice* — the enumerator gives its tokens ids under
+  `TokenEnums\FlexVoice` rather than under `Tokens`, so SAPI cannot tell they
+  are the same nine voices. It was never load-bearing; static tokens are what
+  every SAPI 5 client reads. Installing 1.0.3 removes it.
+
+If the machine's default voice points at a FlexVoice token, the uninstaller
+clears that value rather than leaving it aimed at a voice that has stopped
+existing. SAPI picks a voice on its own when the value is absent.
+
+---
+
 ## Logging
 
 Tick **Write a diagnostic log** in the utility, or set `debug=1` under
