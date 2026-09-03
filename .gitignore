@@ -1,0 +1,17 @@
+# The MindMaker FlexVoice engine, its import library and the voice data.
+# Not ours to redistribute as source; the installer on the Releases page
+# carries them.
+bin/
+
+# Build trees and staged output
+build_x86/
+build_x64/
+build_probe/
+output/
+
+# Local artifacts
+*.obj
+*.exe
+*.pdb
+*.ilk
+probe/*.log

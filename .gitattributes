@@ -1,0 +1,22 @@
+# Mark binaries explicitly. Git's auto-detection has misread small binary
+# files as text before now, and line-ending conversion then corrupts them.
+*.wav binary
+*.bin binary
+*.dll binary
+*.exe binary
+*.lib binary
+*.dat binary
+*.tav binary
+*.zip binary
+
+# Everything else is text with LF in the repository.
+* text=auto
+*.cpp text
+*.hpp text
+*.h   text
+*.py  text
+*.md  text
+*.iss text
+*.rc  text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
