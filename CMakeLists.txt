@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
-project(FlexVoiceSAPI VERSION 1.0.0 LANGUAGES C CXX)
+project(FlexVoiceSAPI VERSION 1.0.1 LANGUAGES C CXX)
+
+# The single source of truth for the version is src/version.h; keep the
+# project() line, the installer's MyAppVersion and that header in step.
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -33,11 +36,16 @@ add_library(FlexVoiceSAPI SHARED
     src/settings.cpp
     src/engine_client.cpp
     src/text_normalize.cpp
+    src/version.rc
     src/flexvoice_sapi.def
 )
 target_include_directories(FlexVoiceSAPI PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(FlexVoiceSAPI PRIVATE ole32 oleaut32 advapi32 shell32 shlwapi)
-target_compile_definitions(FlexVoiceSAPI PRIVATE ${COMMON_DEFS})
+target_compile_definitions(FlexVoiceSAPI PRIVATE ${COMMON_DEFS}
+    FV_FILE_DESCRIPTION="FlexVoice SAPI5 speech engine"
+    FV_INTERNAL_NAME="FlexVoiceSAPI"
+    FV_ORIGINAL_FILENAME="FlexVoiceSAPI.dll"
+    FV_FILETYPE=VFT_DLL)
 set_property(TARGET FlexVoiceSAPI PROPERTY CXX_STANDARD 17)
 
 # Pipe-protocol exerciser, built for both architectures so the 64->32 bridge
@@ -47,10 +55,13 @@ add_executable(client_test
     src/engine_client.cpp
     src/settings.cpp
     src/text_normalize.cpp
+    src/version.rc
 )
 target_include_directories(client_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(client_test PRIVATE advapi32 shell32 shlwapi winmm)
-target_compile_definitions(client_test PRIVATE ${COMMON_DEFS})
+target_compile_definitions(client_test PRIVATE ${COMMON_DEFS}
+    FV_FILE_DESCRIPTION="FlexVoice SAPI5 diagnostics"
+    FV_INTERNAL_NAME="flexvoice_diag")
 set_property(TARGET client_test PROPERTY CXX_STANDARD 17)
 
 # Exercises the real SAPI5 stack. Registers under HKCU so it can run without
@@ -74,6 +85,7 @@ if(NOT BUILD_X64)
         src/fv_engine.cpp
         src/settings.cpp
         src/text_normalize.cpp
+        src/version.rc
     )
     target_include_directories(flexvoice_host PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -82,7 +94,10 @@ if(NOT BUILD_X64)
     target_link_directories(flexvoice_host PRIVATE ${FV_SDK}/lib)
     target_link_libraries(flexvoice_host PRIVATE
         FlexVoice_3_01_001.lib advapi32 shell32 shlwapi)
-    target_compile_definitions(flexvoice_host PRIVATE ${COMMON_DEFS} _HAS_AUTO_PTR_ETC=1)
+    target_compile_definitions(flexvoice_host PRIVATE ${COMMON_DEFS} _HAS_AUTO_PTR_ETC=1
+        FV_FILE_DESCRIPTION="FlexVoice SAPI5 engine host"
+        FV_INTERNAL_NAME="flexvoice_host"
+        FV_ORIGINAL_FILENAME="flexvoice_host.exe")
     set_property(TARGET flexvoice_host PROPERTY CXX_STANDARD 17)
     # The SDK requires RTTI (Engine.h #errors without _CPPRTTI) and throws.
     target_compile_options(flexvoice_host PRIVATE /EHsc /GR)
@@ -100,6 +115,7 @@ if(NOT BUILD_X64)
     add_executable(FlexVoiceConfig WIN32
         src/config/FlexVoiceConfig.cpp
         src/config/FlexVoiceConfig.rc
+        src/version.rc
         src/settings.cpp
         src/engine_client.cpp
         src/text_normalize.cpp
@@ -110,7 +126,10 @@ if(NOT BUILD_X64)
     )
     target_link_libraries(FlexVoiceConfig PRIVATE
         comctl32 winmm advapi32 shell32 shlwapi ole32 oleaut32)
-    target_compile_definitions(FlexVoiceConfig PRIVATE ${COMMON_DEFS})
+    target_compile_definitions(FlexVoiceConfig PRIVATE ${COMMON_DEFS}
+        FV_FILE_DESCRIPTION="FlexVoice configuration utility"
+        FV_INTERNAL_NAME="FlexVoiceConfig"
+        FV_ORIGINAL_FILENAME="FlexVoiceConfig.exe")
     set_property(TARGET FlexVoiceConfig PROPERTY CXX_STANDARD 17)
 endif()
 

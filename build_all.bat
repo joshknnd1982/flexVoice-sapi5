@@ -37,7 +37,7 @@ if not exist "%ISCC%" (
 )
 "%ISCC%" /O"%ROOT%output" "installer\flexvoice.iss" || goto :fail
 echo.
-echo Installer: %ROOT%output\FlexVoiceSAPI_Setup.exe
+for %%f in ("%ROOT%output\FlexVoiceSAPI_Setup_*.exe") do echo Installer: %%f
 
 :done
 popd

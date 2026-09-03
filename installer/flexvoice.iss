@@ -4,7 +4,7 @@
 ; enumerator from there and nowhere else), so this needs administrator rights.
 
 #define MyAppName "FlexVoice SAPI5"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Josh Kennedy"
 #define MyAppURL "https://github.com/joshknnd1982/flexVoice-sapi5"
 
@@ -20,13 +20,23 @@ DefaultDirName={autopf}\FlexVoiceSAPI
 DefaultGroupName=FlexVoice SAPI5
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
-OutputBaseFilename=FlexVoiceSAPI_Setup
+; The version is in the filename as well as the resources, so two
+; downloads sitting in the same folder are told apart at a glance.
+OutputBaseFilename=FlexVoiceSAPI_Setup_{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\FlexVoiceConfig.exe
+; Without these the setup executable carries no version resource at all, and a
+; user with two copies in Downloads cannot tell which is which.
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoCopyright=Copyright (c) 2026 Josh Kennedy. FlexVoice engine (c) Mindmaker Ltd.
 ; The install log is a real debugging aid for a speech engine that will not
 ; speak, so keep it and copy it somewhere the user can find.
 SetupLogging=yes
