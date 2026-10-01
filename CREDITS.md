@@ -23,8 +23,9 @@ usable on a current version of Windows.
 The COM server skeleton — the class factory, the hand-rolled `ISpDataKey` and
 `IEnumSpObjectTokens` implementations, and the registration code — descends
 from **Gozaltech's BestSpeech SAPI 5 wrapper**, by way of the Outloud, Lucent
-and CyberTalk wrappers in this same family. Those files are BSD-licensed and
-are reused here with the namespace renamed and the voice tables replaced.
+and CyberTalk wrappers in this same family. Those files are BSD-licensed
+(Gozaltech's notice and the BSD 3-Clause text are in [NOTICE.md](NOTICE.md))
+and are reused here with the namespace renamed and the voice tables replaced.
 
 ## The prior FlexVoice work
 

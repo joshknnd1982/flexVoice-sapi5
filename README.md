@@ -437,8 +437,11 @@ pass every other test.
 
 ## Licence
 
-BSD 3-Clause — see [LICENSE](LICENSE). That covers the wrapper. The FlexVoice
-engine and its voice data are Mindmaker Ltd.'s work and are not licensed by
-this project; they are distributed in the installer as abandonware, on the
-basis that the company has been gone and the product unsold for over twenty
-years.
+The code written for this project is licensed under the MIT License — see
+[LICENSE](LICENSE). That covers the wrapper, apart from the COM server and
+token enumerator skeleton derived from Gozaltech's BestSpeech wrapper, which
+keeps Gozaltech's notice and BSD 3-Clause terms in [NOTICE.md](NOTICE.md). The
+FlexVoice engine and its voice data are Mindmaker Ltd.'s work and are not
+licensed by this project; they are distributed in the installer as abandonware,
+on the basis that the company has been gone and the product unsold for over
+twenty years.
