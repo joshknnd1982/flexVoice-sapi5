@@ -45,6 +45,7 @@ Copy-Item (Need "$x64\client_test.exe") (Join-Path $out "flexvoice_diag64.exe")
 
 Copy-Item (Join-Path $root "README.md")  $out
 Copy-Item (Join-Path $root "LICENSE")    $out
+Copy-Item (Join-Path $root "NOTICE.md")  $out
 Copy-Item (Join-Path $root "CREDITS.md") $out
 
 $files = Get-ChildItem $out -Recurse -File

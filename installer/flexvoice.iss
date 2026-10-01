@@ -88,6 +88,7 @@ Source: "..\output\flexvoice_diag64.exe";   DestDir: "{app}"; Flags: ignoreversi
 Source: "..\output\engine\*";               DestDir: "{app}\engine"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\output\README.md";              DestDir: "{app}"; Flags: ignoreversion
 Source: "..\output\LICENSE";                DestDir: "{app}"; Flags: ignoreversion
+Source: "..\output\NOTICE.md";              DestDir: "{app}"; Flags: ignoreversion
 Source: "..\output\CREDITS.md";             DestDir: "{app}"; Flags: ignoreversion
 
 [Registry]
